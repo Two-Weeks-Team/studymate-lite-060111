@@ -23,13 +23,10 @@ _raw_url = os.getenv(
     os.getenv("POSTGRES_URL", "sqlite:///./app.db"),
 )
 if _raw_url.startswith("postgresql+asyncpg://"):
-    _raw_url = _raw_url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
+    _raw_url = _raw_url.replace("postgresql+asyncpg://", "postgresql://", 1)
 elif _raw_url.startswith("postgres://"):
-    _raw_url = _raw_url.replace("postgres://", "postgresql+psycopg://", 1)
-elif _raw_url.startswith("postgresql://") and "+psycopg" not in _raw_url:
-    _raw_url = _raw_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    _raw_url = _raw_url.replace("postgres://", "postgresql://", 1)
 
-# SSL is already handled via ?sslmode=require in the URL — no extra connect_args
 engine = create_engine(_raw_url, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 Base = declarative_base()
