@@ -1,4 +1,4 @@
-use client';
+'use client';
 import { useState } from 'react';
 import ImportForm from '@/components/ImportForm';
 import Flashcard from '@/components/Flashcard';
