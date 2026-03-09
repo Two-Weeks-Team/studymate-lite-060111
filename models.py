@@ -1,47 +1,51 @@
 import os
 import uuid
 from datetime import datetime, timedelta
+
+from dotenv import load_dotenv
 from sqlalchemy import (
+    Boolean,
     Column,
-    String,
-    Text,
     DateTime,
     Float,
-    Boolean,
     ForeignKey,
-    func,
     Index,
+    String,
+    Text,
     create_engine,
+    func,
 )
-from sqlalchemy.orm import declarative_base, sessionmaker, relationship
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
-# ---------------------------------------------------------------------------
-# Database URL handling with automatic scheme fixes
-# ---------------------------------------------------------------------------
-_raw_url = os.getenv(
-    "DATABASE_URL",
-    os.getenv("POSTGRES_URL", "sqlite:///./app.db"),
-)
+load_dotenv()
+
+_raw_url = os.getenv("DATABASE_URL", os.getenv("POSTGRES_URL", "sqlite:///./app.db"))
+
 if _raw_url.startswith("postgresql+asyncpg://"):
-    _raw_url = _raw_url.replace("postgresql+asyncpg://", "postgresql://", 1)
+    _raw_url = _raw_url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
 elif _raw_url.startswith("postgres://"):
-    _raw_url = _raw_url.replace("postgres://", "postgresql://", 1)
+    _raw_url = _raw_url.replace("postgres://", "postgresql+psycopg://", 1)
+elif _raw_url.startswith("postgresql://") and "+psycopg" not in _raw_url:
+    _raw_url = _raw_url.replace("postgresql://", "postgresql+psycopg://", 1)
 
-engine = create_engine(_raw_url, future=True)
+if "?ssl=" in _raw_url and "sslmode" not in _raw_url:
+    _raw_url = _raw_url.replace("?ssl=", "?sslmode=")
+if "&ssl=" in _raw_url and "sslmode" not in _raw_url:
+    _raw_url = _raw_url.replace("&ssl=", "&sslmode=")
+
+connect_args: dict = {}
+if (
+    "sqlite" not in _raw_url
+    and "localhost" not in _raw_url
+    and "sslmode" not in _raw_url
+    and "ssl" not in _raw_url
+):
+    connect_args["sslmode"] = "require"
+
+engine = create_engine(_raw_url, echo=False, connect_args=connect_args)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 Base = declarative_base()
 
-
-# ---------------------------------------------------------------------------
-# Auto-create tables on import (safe — uses CREATE IF NOT EXISTS)
-# ---------------------------------------------------------------------------
-def init_db():
-    Base.metadata.create_all(engine)
-
-
-# ---------------------------------------------------------------------------
-# Prefix for all tables to avoid collisions in shared DB
-# ---------------------------------------------------------------------------
 TABLE_PREFIX = "sm_"
 
 
@@ -60,14 +64,12 @@ class Session(Base):
         nullable=False,
         default=lambda: datetime.utcnow() + timedelta(days=30),
     )
-
     flashcards = relationship(
         "Flashcard", back_populates="session", cascade="all, delete-orphan"
     )
     reviews = relationship(
         "Review", back_populates="session", cascade="all, delete-orphan"
     )
-
     __table_args__ = (Index(f"idx_{TABLE_PREFIX}sessions_expires_at", "expires_at"),)
 
 
@@ -91,12 +93,10 @@ class Flashcard(Base):
     generated_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-
     session = relationship("Session", back_populates="flashcards")
     reviews = relationship(
         "Review", back_populates="flashcard", cascade="all, delete-orphan"
     )
-
     __table_args__ = (
         Index(f"idx_{TABLE_PREFIX}flashcards_session", "session_id"),
         Index(f"idx_{TABLE_PREFIX}flashcards_next_review", "next_review"),
@@ -120,10 +120,8 @@ class Review(Base):
     reviewed_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-
     flashcard = relationship("Flashcard", back_populates="reviews")
     session = relationship("Session", back_populates="reviews")
-
     __table_args__ = (
         Index(f"idx_{TABLE_PREFIX}reviews_flashcard", "flashcard_id"),
         Index(f"idx_{TABLE_PREFIX}reviews_session", "session_id"),

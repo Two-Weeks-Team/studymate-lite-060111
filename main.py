@@ -1,20 +1,30 @@
-from contextlib import asynccontextmanager
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from models import init_db
+from models import Base, engine
 from routes import router as api_router
 
+app = FastAPI(title="StudyMate Lite", version="0.1.0")
 
-@asynccontextmanager
-async def lifespan(application: FastAPI):
-    init_db()
-    yield
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-
-app = FastAPI(title="StudyMate Lite", version="0.1.0", lifespan=lifespan)
 app.include_router(api_router)
+
+
+@app.on_event("startup")
+def on_startup() -> None:
+    Base.metadata.create_all(bind=engine)
 
 
 @app.get("/health", response_class=JSONResponse)
@@ -28,7 +38,7 @@ LANDING_HTML = """\
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>StudyMate Lite — AI Flashcards</title>
+<title>StudyMate Lite</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#0f0f1a;color:#e4e4ef;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;display:flex;flex-direction:column}
@@ -64,7 +74,7 @@ footer a{color:#ff9800;text-decoration:none}
 <main>
   <div class="card">
     <h2>Create Flashcards</h2>
-    <textarea id="notes" placeholder="Paste lecture notes, textbook passages, or any study material here…"></textarea>
+    <textarea id="notes" placeholder="Paste lecture notes, textbook passages, or any study material here..."></textarea>
     <div class="row">
       <select id="maxCards">
         <option value="3">3 cards</option>
@@ -87,24 +97,24 @@ footer a{color:#ff9800;text-decoration:none}
 </footer>
 <script>
 async function generate(){
-  const btn=document.getElementById('genBtn');
-  const notes=document.getElementById('notes').value.trim();
+  var btn=document.getElementById('genBtn');
+  var notes=document.getElementById('notes').value.trim();
   if(!notes){alert('Please paste some notes first.');return}
-  btn.disabled=true;btn.textContent='Generating…';
+  btn.disabled=true;btn.textContent='Generating...';
   try{
-    const r=await fetch('/api/v1/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:notes,max_cards:parseInt(document.getElementById('maxCards').value)})});
-    const d=await r.json();
-    const box=document.getElementById('cards');box.innerHTML='';
-    const res=document.getElementById('result');
+    var r=await fetch('/api/v1/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:notes,max_cards:parseInt(document.getElementById('maxCards').value)})});
+    var d=await r.json();
+    var box=document.getElementById('cards');box.innerHTML='';
+    var res=document.getElementById('result');
     if(!d.cards||d.cards.length===0){
       box.innerHTML='<p class="note">No flashcards generated. Try pasting more detailed notes.</p>';
       res.style.display='block';return
     }
     document.getElementById('count').textContent='('+d.cards.length+')';
-    d.cards.forEach(c=>{
-      const el=document.createElement('div');el.className='fc';
+    d.cards.forEach(function(c){
+      var el=document.createElement('div');el.className='fc';
       el.innerHTML='<div class="fc-q">Q: '+esc(c.question)+'</div><div class="fc-a">A: '+esc(c.answer)+'</div>';
-      el.onclick=()=>el.classList.toggle('open');
+      el.onclick=function(){el.classList.toggle('open')};
       box.appendChild(el)
     });
     res.style.display='block';
@@ -112,7 +122,7 @@ async function generate(){
   }catch(e){alert('Error: '+e.message)}
   finally{btn.disabled=false;btn.textContent='Generate'}
 }
-function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML}
 </script>
 </body>
 </html>
